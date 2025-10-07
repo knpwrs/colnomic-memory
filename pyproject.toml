@@ -1,0 +1,12 @@
+[project]
+name = "colnomic-memory"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.0.0",
+    "pillow>=10.0.0",
+    "transformers>=4.40.0",
+    "colpali-engine @ git+https://github.com/illuin-tech/colpali.git",
+]
