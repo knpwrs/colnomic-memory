@@ -1,4 +1,4 @@
-# ColNomic Memory
+# Nomic Memory
 
 Generate image embeddings using Nomic's multimodal embedding models with support for multiple compute backends and memory usage tracking. Supports both ColNomic (multi-vector) and Nomic (single-vector) variants in 7B and 3B parameter sizes.
 
@@ -164,18 +164,21 @@ Peak CUDA memory used: 14.32 GB (14663.45 MB)
 This script supports four Nomic multimodal embedding models:
 
 ### ColNomic Models (Multi-vector)
+
 - Use late interaction mechanism for more precise matching
 - Create multiple embeddings per document/query
 - Best performance on visual document retrieval benchmarks
 - Ideal for: research papers, technical docs, product catalogs, financial reports
 
 ### Nomic Models (Single-vector)
+
 - Use dense single-vector embeddings
 - Lower storage requirements
 - Simpler retrieval pipeline
 - Still achieve strong performance on multimodal tasks
 
 All models:
+
 - Excel at visual document retrieval
 - Directly encode interleaved text and images
 - Support multiple image formats
