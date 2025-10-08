@@ -5,6 +5,7 @@ Supports multiple backends (CUDA, MPS, CPU) and reports peak memory usage.
 """
 import argparse
 import sys
+import time
 from pathlib import Path
 from typing import List, Optional, Tuple
 from enum import Enum
@@ -129,7 +130,8 @@ def process_images_in_batches(
     model: ColQwen2_5,
     processor: ColQwen2_5_Processor,
     batch_size: int,
-    backend: Backend
+    backend: Backend,
+    image_only: bool = False
 ) -> List[torch.Tensor]:
     """Process images in batches and generate embeddings."""
     all_embeddings = []
@@ -142,7 +144,12 @@ def process_images_in_batches(
         batch_images = processor.process_images(batch).to(model.device)
 
         with torch.no_grad():
-            embeddings = model(**batch_images)
+            if image_only:
+                # Use forward_image to process only image embeddings
+                embeddings = model.forward_image(**batch_images)
+            else:
+                # Use standard forward which includes both image and text processing
+                embeddings = model(**batch_images)
             all_embeddings.append(embeddings.cpu())
 
         # Clear cache after each batch
@@ -185,6 +192,11 @@ def main():
         choices=["cuda", "mps", "cpu", "auto"],
         default="auto",
         help="Compute backend to use (default: auto - auto-detect best available)"
+    )
+    parser.add_argument(
+        "--image-only",
+        action="store_true",
+        help="Process only image embeddings without text encoder (uses model.forward_image)"
     )
 
     args = parser.parse_args()
@@ -236,6 +248,7 @@ def main():
 
     print(f"Using backend: {backend.value}")
     print(f"Using dtype: {dtype}")
+    print(f"Image-only mode: {args.image_only}")
     print(f"Loading model: {model_name}")
 
     # Load model
@@ -258,7 +271,15 @@ def main():
 
     # Process images
     print(f"\nProcessing {len(images)} images with batch size {args.batch_size}")
-    embeddings = process_images_in_batches(images, model, processor, args.batch_size, backend)
+    start_time = time.time()
+    embeddings = process_images_in_batches(
+        images, model, processor, args.batch_size, backend, image_only=args.image_only
+    )
+    end_time = time.time()
+
+    # Calculate runtime
+    runtime_seconds = end_time - start_time
+    runtime_minutes = runtime_seconds / 60
 
     # Get peak memory usage
     peak_memory_bytes, peak_memory_gb = get_memory_stats(backend)
@@ -269,6 +290,7 @@ def main():
     print(f"Backend: {backend.value}")
     print(f"Total images processed: {len(images)}")
     print(f"Total batches: {len(embeddings)}")
+    print(f"Runtime: {runtime_seconds:.2f} seconds ({runtime_minutes:.2f} minutes)")
     if backend != Backend.CPU:
         print(f"Peak {backend.value.upper()} memory used: {peak_memory_gb:.2f} GB ({peak_memory_mb:.2f} MB)")
     else:

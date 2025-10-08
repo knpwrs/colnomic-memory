@@ -6,6 +6,7 @@ Generate image embeddings using Nomic's multimodal embedding models with support
 
 - **Multiple model variants**: Support for ColNomic (multi-vector) and Nomic (single-vector) models in 7B and 3B sizes
 - **Multi-backend support**: Automatically detects and uses the best available backend (CUDA, MPS, or CPU)
+- **Image-only mode**: Option to process only image embeddings without the text encoder for reduced memory usage
 - **Memory tracking**: Reports peak memory usage during processing
 - **Batch processing**: Configurable batch sizes for optimal performance
 - **Multiple image formats**: Supports JPG, PNG, BMP, GIF, TIFF, and WebP
@@ -107,6 +108,23 @@ Specify a different model or local path (overrides --model-variant):
 uv run python main.py /path/to/images --model-name /path/to/local/model
 ```
 
+### Image-Only Mode
+
+Process only image embeddings without the text encoder to reduce memory usage:
+
+```bash
+# Use image-only mode (calls model.forward_image instead of model forward)
+uv run python main.py /path/to/images --image-only
+
+# Combine with other options
+uv run python main.py /path/to/images \
+  --image-only \
+  --model-variant colnomic-3b \
+  --batch-size 16
+```
+
+This mode is useful when you only need visual embeddings and want to minimize memory consumption.
+
 ### Complete Example
 
 ```bash
@@ -125,6 +143,7 @@ uv run python main.py ./my_images \
 | `--model-name` | str | None | Custom model name or path (overrides `--model-variant`) |
 | `--batch-size` | int | 8 | Batch size for processing images |
 | `--backend` | str | auto | Compute backend: `cuda`, `mps`, `cpu`, or `auto` |
+| `--image-only` | flag | False | Process only image embeddings without text encoder |
 
 ## Output
 
@@ -135,6 +154,7 @@ Using model variant: colnomic-7b (nomic-ai/colnomic-embed-multimodal-7b)
 Auto-detected backend: cuda
 Using backend: cuda
 Using dtype: torch.bfloat16
+Image-only mode: True
 Loading model: nomic-ai/colnomic-embed-multimodal-7b
 Model loaded successfully
 Found 100 images in /path/to/images
@@ -183,6 +203,17 @@ All models:
 - Directly encode interleaved text and images
 - Support multiple image formats
 - Built on Qwen2.5-VL architecture
+
+## Performance & Memory Usage
+
+Benchmark results on various configurations:
+
+### Nomic 3B (Single-vector)
+
+| Batch Size | Mode | Peak VRAM Usage | Command |
+|------------|------|-----------------|---------|
+| 4 | Both encoders | 8.15 GB (8341.92 MB) | `uv run python main.py ./images --model-variant nomic-3b --batch-size 4` |
+| 8 | Both encoders | 10.18 GB (10428.73 MB) | `uv run python main.py ./images --model-variant nomic-3b --batch-size 8` |
 
 ## Sample Images
 
