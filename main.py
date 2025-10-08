@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to generate embeddings for images using ColNomic Embed Multimodal 7B.
+Script to generate embeddings for images using Nomic/ColNomic Embed Multimodal models.
 Supports multiple backends (CUDA, MPS, CPU) and reports peak memory usage.
 """
 import argparse
@@ -13,6 +13,32 @@ import torch
 from PIL import Image
 from transformers.utils.import_utils import is_flash_attn_2_available
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
+
+
+class ModelVariant(Enum):
+    """Supported Nomic model variants."""
+    COLNOMIC_7B = "colnomic-7b"
+    COLNOMIC_3B = "colnomic-3b"
+    NOMIC_7B = "nomic-7b"
+    NOMIC_3B = "nomic-3b"
+
+    def get_model_name(self) -> str:
+        """Get the Hugging Face model identifier."""
+        model_map = {
+            ModelVariant.COLNOMIC_7B: "nomic-ai/colnomic-embed-multimodal-7b",
+            ModelVariant.COLNOMIC_3B: "nomic-ai/colnomic-embed-multimodal-3b",
+            ModelVariant.NOMIC_7B: "nomic-ai/nomic-embed-multimodal-7b",
+            ModelVariant.NOMIC_3B: "nomic-ai/nomic-embed-multimodal-3b",
+        }
+        return model_map[self]
+
+    @classmethod
+    def from_string(cls, variant_str: str) -> "ModelVariant":
+        """Convert string to ModelVariant enum."""
+        variant_map = {v.value: v for v in cls}
+        if variant_str not in variant_map:
+            raise ValueError(f"Unknown model variant: {variant_str}. Choose from: {list(variant_map.keys())}")
+        return variant_map[variant_str]
 
 
 class Backend(Enum):
@@ -127,7 +153,7 @@ def process_images_in_batches(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate embeddings for images using ColNomic Embed Multimodal 7B"
+        description="Generate embeddings for images using Nomic/ColNomic Embed Multimodal models"
     )
     parser.add_argument(
         "directory",
@@ -141,10 +167,17 @@ def main():
         help="Batch size for processing images (default: 8)"
     )
     parser.add_argument(
+        "--model-variant",
+        type=str,
+        choices=["colnomic-7b", "colnomic-3b", "nomic-7b", "nomic-3b"],
+        default="colnomic-7b",
+        help="Model variant to use (default: colnomic-7b). ColNomic models use multi-vector embeddings, Nomic models use single-vector embeddings."
+    )
+    parser.add_argument(
         "--model-name",
         type=str,
-        default="nomic-ai/colnomic-embed-multimodal-7b",
-        help="Model name/path (default: nomic-ai/colnomic-embed-multimodal-7b)"
+        default=None,
+        help="Custom model name/path (overrides --model-variant if specified)"
     )
     parser.add_argument(
         "--backend",
@@ -163,6 +196,15 @@ def main():
     if not args.directory.is_dir():
         print(f"Error: Path is not a directory: {args.directory}", file=sys.stderr)
         sys.exit(1)
+
+    # Determine model to use
+    if args.model_name:
+        model_name = args.model_name
+        print(f"Using custom model: {model_name}")
+    else:
+        model_variant = ModelVariant.from_string(args.model_variant)
+        model_name = model_variant.get_model_name()
+        print(f"Using model variant: {args.model_variant} ({model_name})")
 
     # Determine backend
     if args.backend == "auto":
@@ -194,17 +236,17 @@ def main():
 
     print(f"Using backend: {backend.value}")
     print(f"Using dtype: {dtype}")
-    print(f"Loading model: {args.model_name}")
+    print(f"Loading model: {model_name}")
 
     # Load model
     model = ColQwen2_5.from_pretrained(
-        args.model_name,
+        model_name,
         torch_dtype=dtype,
         device_map=device_map,
         attn_implementation="flash_attention_2" if use_flash_attn else None,
     ).eval()
 
-    processor = ColQwen2_5_Processor.from_pretrained(args.model_name)
+    processor = ColQwen2_5_Processor.from_pretrained(model_name)
 
     print("Model loaded successfully")
 
