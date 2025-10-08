@@ -184,6 +184,10 @@ All models:
 - Support multiple image formats
 - Built on Qwen2.5-VL architecture
 
+## Sample Images
+
+This repository includes sample images in the `images/` directory, sourced from [yavuzceliker/sample-images](https://github.com/yavuzceliker/sample-images).
+
 ## License
 
 See LICENSE file for details.
