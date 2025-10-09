@@ -112,7 +112,6 @@ def run_benchmark(
     batch_size: int,
     image_dir: Path,
     backend: str = "auto",
-    image_only: bool = False,
     ntfy_topic: Optional[str] = None
 ) -> Dict[str, Any]:
     """Run a single benchmark configuration."""
@@ -124,12 +123,8 @@ def run_benchmark(
         "--backend", backend,
     ]
 
-    if image_only:
-        cmd.append("--image-only")
-
-    mode = "image-only" if image_only else "full"
     print(f"\n{'='*70}")
-    print(f"Running: {model_variant} | batch={batch_size} | mode={mode}")
+    print(f"Running: {model_variant} | batch={batch_size}")
     print(f"{'='*70}")
 
     try:
@@ -150,7 +145,7 @@ def run_benchmark(
             if ntfy_topic:
                 send_ntfy_notification(
                     ntfy_topic,
-                    f"Failed: {model_variant} batch={batch_size} mode={mode}\nError: {result.stderr[:200]}",
+                    f"Failed: {model_variant} batch={batch_size}\nError: {result.stderr[:200]}",
                     title="Benchmark Failed",
                     priority="high",
                     tags=["x", "warning"]
@@ -159,8 +154,6 @@ def run_benchmark(
             return {
                 "model_variant": model_variant,
                 "batch_size": batch_size,
-                "image_only": image_only,
-                "mode": mode,
                 "status": "failed",
                 "error": result.stderr,
                 "wall_time_seconds": end_time - start_time,
@@ -175,7 +168,7 @@ def run_benchmark(
             memory_str = f"{metrics.get('peak_memory_gb', 0):.2f} GB" if metrics.get('peak_memory_gb') else "N/A"
             send_ntfy_notification(
                 ntfy_topic,
-                f"Completed: {model_variant} batch={batch_size} mode={mode}\nRuntime: {runtime_str}\nVRAM: {memory_str}",
+                f"Completed: {model_variant} batch={batch_size}\nRuntime: {runtime_str}\nVRAM: {memory_str}",
                 title="Benchmark Complete",
                 priority="default",
                 tags=["white_check_mark"]
@@ -184,8 +177,6 @@ def run_benchmark(
         return {
             "model_variant": model_variant,
             "batch_size": batch_size,
-            "image_only": image_only,
-            "mode": mode,
             "status": "success",
             "wall_time_seconds": end_time - start_time,
             **metrics
@@ -198,7 +189,7 @@ def run_benchmark(
         if ntfy_topic:
             send_ntfy_notification(
                 ntfy_topic,
-                f"Timeout: {model_variant} batch={batch_size} mode={mode}\nExceeded 1 hour limit",
+                f"Timeout: {model_variant} batch={batch_size}\nExceeded 1 hour limit",
                 title="Benchmark Timeout",
                 priority="high",
                 tags=["alarm_clock", "warning"]
@@ -207,8 +198,6 @@ def run_benchmark(
         return {
             "model_variant": model_variant,
             "batch_size": batch_size,
-            "image_only": image_only,
-            "mode": mode,
             "status": "timeout",
             "error": "Command timed out after 1 hour",
         }
@@ -219,7 +208,7 @@ def run_benchmark(
         if ntfy_topic:
             send_ntfy_notification(
                 ntfy_topic,
-                f"Error: {model_variant} batch={batch_size} mode={mode}\n{str(e)}",
+                f"Error: {model_variant} batch={batch_size}\n{str(e)}",
                 title="Benchmark Error",
                 priority="high",
                 tags=["x", "warning"]
@@ -228,8 +217,6 @@ def run_benchmark(
         return {
             "model_variant": model_variant,
             "batch_size": batch_size,
-            "image_only": image_only,
-            "mode": mode,
             "status": "error",
             "error": str(e),
         }
@@ -254,45 +241,32 @@ def format_results_as_markdown(results: List[Dict[str, Any]]) -> str:
         output.append(f"## {model.upper()}")
         output.append("")
 
-        # Separate by mode
-        modes = {}
-        for result in model_results:
-            mode = result["mode"]
-            if mode not in modes:
-                modes[mode] = []
-            modes[mode].append(result)
+        # Create table header
+        output.append("| Batch Size | Status | Runtime | Peak VRAM | Images | Batches |")
+        output.append("|------------|--------|---------|-----------|--------|---------|")
 
-        for mode, mode_results in sorted(modes.items()):
-            if len(modes) > 1:  # Only show mode header if there are multiple modes
-                output.append(f"### Mode: {mode}")
-                output.append("")
+        # Sort by batch size
+        for result in sorted(model_results, key=lambda x: x["batch_size"]):
+            batch_size = result["batch_size"]
+            status = result["status"]
 
-            # Create table header
-            output.append("| Batch Size | Status | Runtime | Peak VRAM | Images | Batches |")
-            output.append("|------------|--------|---------|-----------|--------|---------|")
-
-            # Sort by batch size
-            for result in sorted(mode_results, key=lambda x: x["batch_size"]):
-                batch_size = result["batch_size"]
-                status = result["status"]
-
-                if status == "success":
-                    runtime_str = f"{result['runtime_minutes']:.2f} min"
-                    if result['peak_memory_gb'] is not None:
-                        memory_str = f"{result['peak_memory_gb']:.2f} GB"
-                    else:
-                        memory_str = "N/A"
-                    images_str = str(result.get('total_images', 'N/A'))
-                    batches_str = str(result.get('total_batches', 'N/A'))
+            if status == "success":
+                runtime_str = f"{result['runtime_minutes']:.2f} min"
+                if result['peak_memory_gb'] is not None:
+                    memory_str = f"{result['peak_memory_gb']:.2f} GB"
                 else:
-                    runtime_str = "Failed"
                     memory_str = "N/A"
-                    images_str = "N/A"
-                    batches_str = "N/A"
+                images_str = str(result.get('total_images', 'N/A'))
+                batches_str = str(result.get('total_batches', 'N/A'))
+            else:
+                runtime_str = "Failed"
+                memory_str = "N/A"
+                images_str = "N/A"
+                batches_str = "N/A"
 
-                output.append(f"| {batch_size} | {status} | {runtime_str} | {memory_str} | {images_str} | {batches_str} |")
+            output.append(f"| {batch_size} | {status} | {runtime_str} | {memory_str} | {images_str} | {batches_str} |")
 
-            output.append("")
+        output.append("")
 
     # Add detailed results section
     output.append("## Detailed Results (JSON)")
@@ -343,11 +317,6 @@ def main():
         help=f"Batch sizes to test (default: {BATCH_SIZES})"
     )
     parser.add_argument(
-        "--skip-nomic-full",
-        action="store_true",
-        help="Skip full mode for Nomic models (only run image-only mode)"
-    )
-    parser.add_argument(
         "--ntfy-topic",
         type=str,
         default=None,
@@ -388,7 +357,6 @@ def main():
     print(f"Models to test: {', '.join(models_to_run)}")
     print(f"Batch sizes: {args.batch_sizes}")
     print(f"Output file: {args.output}")
-    print(f"Skip Nomic full mode: {args.skip_nomic_full}")
     print(f"Ntfy topic: {args.ntfy_topic if args.ntfy_topic else 'None (disabled)'}")
     print("="*70)
 
@@ -404,60 +372,19 @@ def main():
 
     # Run benchmarks
     results = []
-    total_runs = 0
-
-    # Count total runs
-    for model in models_to_run:
-        is_nomic = model in NOMIC_MODELS
-        for batch_size in args.batch_sizes:
-            if is_nomic:
-                if not args.skip_nomic_full:
-                    total_runs += 1  # Full mode
-                total_runs += 1  # Image-only mode
-            else:
-                total_runs += 1  # DINOv2 (only one mode)
-
+    total_runs = len(models_to_run) * len(args.batch_sizes)
     current_run = 0
 
     for model in models_to_run:
-        is_nomic = model in NOMIC_MODELS
-
         for batch_size in args.batch_sizes:
-            if is_nomic:
-                # Run Nomic models in both modes
-                if not args.skip_nomic_full:
-                    current_run += 1
-                    print(f"\n[{current_run}/{total_runs}] Running {model} batch={batch_size} mode=full")
-                    result = run_benchmark(
-                        model, batch_size, args.image_dir,
-                        backend=args.backend, image_only=False,
-                        ntfy_topic=args.ntfy_topic
-                    )
-                    results.append(result)
-
-                    # Save intermediate results
-                    with open(args.output, 'w') as f:
-                        f.write(format_results_as_markdown(results))
-
-                current_run += 1
-                print(f"\n[{current_run}/{total_runs}] Running {model} batch={batch_size} mode=image-only")
-                result = run_benchmark(
-                    model, batch_size, args.image_dir,
-                    backend=args.backend, image_only=True,
-                    ntfy_topic=args.ntfy_topic
-                )
-                results.append(result)
-
-            else:
-                # Run DINOv2 models (no image-only mode needed)
-                current_run += 1
-                print(f"\n[{current_run}/{total_runs}] Running {model} batch={batch_size}")
-                result = run_benchmark(
-                    model, batch_size, args.image_dir,
-                    backend=args.backend, image_only=False,
-                    ntfy_topic=args.ntfy_topic
-                )
-                results.append(result)
+            current_run += 1
+            print(f"\n[{current_run}/{total_runs}] Running {model} batch={batch_size}")
+            result = run_benchmark(
+                model, batch_size, args.image_dir,
+                backend=args.backend,
+                ntfy_topic=args.ntfy_topic
+            )
+            results.append(result)
 
             # Save intermediate results after each run
             with open(args.output, 'w') as f:
