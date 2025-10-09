@@ -209,6 +209,7 @@ uv run python test_dinov2.py
 ```
 
 The test script includes:
+
 - Model type detection tests
 - Model name mapping tests
 - Optional model loading and embedding extraction test (requires downloading DINOv2 Small model)
@@ -280,20 +281,23 @@ uv run python benchmark_all.py \
 The benchmark script can send push notifications via [ntfy.sh](https://ntfy.sh) to keep you updated on long-running benchmarks:
 
 **Notifications sent for:**
+
 - Benchmark suite start
 - Each individual run completion (with runtime and VRAM stats)
 - Each individual run failure/timeout/error
 - Final suite completion summary
 
 **To receive notifications:**
+
 1. Choose a unique topic name (e.g., `my-gpu-benchmarks`)
 2. Subscribe to your topic:
-   - Web: Visit https://ntfy.sh/your-topic-name
+   - Web: Visit <https://ntfy.sh/your-topic-name>
    - Mobile: Download ntfy app and subscribe
    - Desktop: Use ntfy desktop client
 3. Run benchmark with `--ntfy-topic your-topic-name`
 
 Example:
+
 ```bash
 # Start benchmark with notifications
 uv run python benchmark_all.py \
@@ -307,6 +311,7 @@ uv run python benchmark_all.py \
 ### Benchmark Output
 
 The script generates a markdown file with:
+
 - Summary tables for each model variant
 - Runtime, peak VRAM, and success/failure status
 - Detailed JSON results at the end
@@ -336,6 +341,7 @@ This script supports multiple embedding model families:
 - Built on Qwen2.5-VL architecture
 
 All Nomic models:
+
 - Excel at visual document retrieval
 - Directly encode interleaved text and images
 - Support multiple image formats
@@ -353,12 +359,14 @@ All Nomic models:
 ### Choosing Between Model Families
 
 **Use Nomic/ColNomic models when:**
+
 - You need multimodal embeddings (text + images together)
 - Working with visual documents (PDFs, slides, diagrams)
 - Need to retrieve based on both visual and textual content
 - Want state-of-the-art performance on document retrieval
 
 **Use DINOv2 models when:**
+
 - You only need pure image embeddings
 - Working with photographs, artwork, or general images
 - Want lighter-weight models with faster inference
@@ -367,17 +375,87 @@ All Nomic models:
 
 ## Performance & Memory Usage
 
-Benchmark results on various configurations:
+Benchmark results on various configurations (2000 images):
+
+### ColNomic 3B (Multi-vector)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Both encoders | 7.49 GB (7666.98 MB) | 10:16 | `uv run python main.py ./images --model-variant colnomic-3b --batch-size 1` |
+| 4 | Both encoders | 9.44 GB (9661.52 MB) | 14:31 | `uv run python main.py ./images --model-variant colnomic-3b --batch-size 4` |
+| 8 | Both encoders | 14.69 GB (15044.16 MB) | 20:52 | `uv run python main.py ./images --model-variant colnomic-3b --batch-size 8` |
+| 16 | Both encoders | 34.15 GB (34964.95 MB) | 33:43 | `uv run python main.py ./images --model-variant colnomic-3b --batch-size 16` |
+| 32 | Both encoders | OOM | Failed | `uv run python main.py ./images --model-variant colnomic-3b --batch-size 32` |
+
+### ColNomic 7B (Multi-vector)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Both encoders | 14.92 GB (15280.17 MB) | 06:21 | `uv run python main.py ./images --model-variant colnomic-7b --batch-size 1` |
+| 4 | Both encoders | 15.82 GB (16201.52 MB) | 07:38 | `uv run python main.py ./images --model-variant colnomic-7b --batch-size 4` |
+| 8 | Both encoders | 17.69 GB (18113.69 MB) | 09:46 | `uv run python main.py ./images --model-variant colnomic-7b --batch-size 8` |
+| 16 | Both encoders | 24.81 GB (25404.05 MB) | 14:11 | `uv run python main.py ./images --model-variant colnomic-7b --batch-size 16` |
+| 32 | Both encoders | 51.42 GB (52652.81 MB) | 23:13 | `uv run python main.py ./images --model-variant colnomic-7b --batch-size 32` |
 
 ### Nomic 3B (Single-vector)
 
 | Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
 |------------|------|-----------------|-----------------|---------|
-| 1 | Both encoders | 7.35 GB (7528.37 MB) | 07:07 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 1` |
-| 4 | Both encoders | 8.15 GB (8341.92 MB) | 08:37 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 4` |
-| 8 | Both encoders | 10.18 GB (10428.73 MB) | 11:29 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 8` |
-| 16 | Both encoders | 17.29 GB (17701.11 MB) | 17:17 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 16` |
-| 32 | Both encoders | 43.86 GB (44914.38 MB) | 29:11 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 32` |
+| 1 | Both encoders | 7.35 GB (7528.37 MB) | 06:23 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 1` |
+| 4 | Both encoders | 8.15 GB (8341.92 MB) | 07:18 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 4` |
+| 8 | Both encoders | 10.18 GB (10428.73 MB) | 09:21 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 8` |
+| 16 | Both encoders | 17.29 GB (17701.72 MB) | 13:44 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 16` |
+| 32 | Both encoders | 43.86 GB (44914.38 MB) | 22:45 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 32` |
+
+### Nomic 7B (Single-vector)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Both encoders | 14.92 GB (15273.78 MB) | 06:26 | `uv run python main.py ./images --model-variant nomic-7b --batch-size 1` |
+| 4 | Both encoders | 15.82 GB (16194.58 MB) | 07:41 | `uv run python main.py ./images --model-variant nomic-7b --batch-size 4` |
+| 8 | Both encoders | 17.68 GB (18106.06 MB) | 09:48 | `uv run python main.py ./images --model-variant nomic-7b --batch-size 8` |
+| 16 | Both encoders | 24.80 GB (25397.00 MB) | 14:08 | `uv run python main.py ./images --model-variant nomic-7b --batch-size 16` |
+| 32 | Both encoders | 51.41 GB (52645.00 MB) | 23:10 | `uv run python main.py ./images --model-variant nomic-7b --batch-size 32` |
+
+### DINOv2 Small (22M params)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Vision only | 0.08 GB (78.93 MB) | 00:29 | `uv run python main.py ./images --model-variant dinov2-small --batch-size 1` |
+| 4 | Vision only | 0.09 GB (89.07 MB) | 00:23 | `uv run python main.py ./images --model-variant dinov2-small --batch-size 4` |
+| 8 | Vision only | 0.10 GB (104.59 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-small --batch-size 8` |
+| 16 | Vision only | 0.13 GB (129.62 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-small --batch-size 16` |
+| 32 | Vision only | 0.18 GB (183.83 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-small --batch-size 32` |
+
+### DINOv2 Base (86M params)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Vision only | 0.20 GB (209.52 MB) | 00:29 | `uv run python main.py ./images --model-variant dinov2-base --batch-size 1` |
+| 4 | Vision only | 0.23 GB (230.51 MB) | 00:23 | `uv run python main.py ./images --model-variant dinov2-base --batch-size 4` |
+| 8 | Vision only | 0.25 GB (253.40 MB) | 00:22 | `uv run python main.py ./images --model-variant dinov2-base --batch-size 8` |
+| 16 | Vision only | 0.30 GB (302.80 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-base --batch-size 16` |
+| 32 | Vision only | 0.39 GB (402.34 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-base --batch-size 32` |
+
+### DINOv2 Large (300M params)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Vision only | 0.61 GB (620.87 MB) | 00:36 | `uv run python main.py ./images --model-variant dinov2-large --batch-size 1` |
+| 4 | Vision only | 0.63 GB (645.71 MB) | 00:25 | `uv run python main.py ./images --model-variant dinov2-large --batch-size 4` |
+| 8 | Vision only | 0.66 GB (678.70 MB) | 00:23 | `uv run python main.py ./images --model-variant dinov2-large --batch-size 8` |
+| 16 | Vision only | 0.72 GB (742.37 MB) | 00:22 | `uv run python main.py ./images --model-variant dinov2-large --batch-size 16` |
+| 32 | Vision only | 0.85 GB (872.03 MB) | 00:21 | `uv run python main.py ./images --model-variant dinov2-large --batch-size 32` |
+
+### DINOv2 Giant (1.1B params)
+
+| Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
+|------------|------|-----------------|-----------------|---------|
+| 1 | Vision only | 2.16 GB (2214.30 MB) | 00:47 | `uv run python main.py ./images --model-variant dinov2-giant --batch-size 1` |
+| 4 | Vision only | 2.21 GB (2258.06 MB) | 00:28 | `uv run python main.py ./images --model-variant dinov2-giant --batch-size 4` |
+| 8 | Vision only | 2.26 GB (2311.63 MB) | 00:26 | `uv run python main.py ./images --model-variant dinov2-giant --batch-size 8` |
+| 16 | Vision only | 2.37 GB (2422.44 MB) | 00:24 | `uv run python main.py ./images --model-variant dinov2-giant --batch-size 16` |
+| 32 | Vision only | 2.58 GB (2644.46 MB) | 00:24 | `uv run python main.py ./images --model-variant dinov2-giant --batch-size 32` |
 
 ## Sample Images
 
