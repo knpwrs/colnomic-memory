@@ -212,11 +212,11 @@ Benchmark results on various configurations:
 
 | Batch Size | Mode | Peak VRAM Usage | Processing Time | Command |
 |------------|------|-----------------|-----------------|---------|
-| 1 | Both encoders | 7.35 GB (7528.37 MB) | 7.12 minutes | `uv run python main.py ./images --model-variant nomic-3b --batch-size 1` |
-| 4 | Both encoders | 8.15 GB (8341.92 MB) | 8.62 minutes | `uv run python main.py ./images --model-variant nomic-3b --batch-size 4` |
-| 8 | Both encoders | 10.18 GB (10428.73 MB) | 11.48 minutes | `uv run python main.py ./images --model-variant nomic-3b --batch-size 8` |
-| 16 | Both encoders | 17.29 GB (17701.11 MB) | 17.28 minutes | `uv run python main.py ./images --model-variant nomic-3b --batch-size 16` |
-| 32 | Both encoders | 43.86 GB (44914.38 MB) | 29.18 minutes | `uv run python main.py ./images --model-variant nomic-3b --batch-size 32` |
+| 1 | Both encoders | 7.35 GB (7528.37 MB) | 07:07 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 1` |
+| 4 | Both encoders | 8.15 GB (8341.92 MB) | 08:37 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 4` |
+| 8 | Both encoders | 10.18 GB (10428.73 MB) | 11:29 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 8` |
+| 16 | Both encoders | 17.29 GB (17701.11 MB) | 17:17 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 16` |
+| 32 | Both encoders | 43.86 GB (44914.38 MB) | 29:11 | `uv run python main.py ./images --model-variant nomic-3b --batch-size 32` |
 
 ## Sample Images
 
