@@ -6,7 +6,6 @@ Generate image embeddings using Nomic's multimodal embedding models and DINOv2 v
 
 - **Multiple model variants**: Support for ColNomic (multi-vector) and Nomic (single-vector) models in 7B and 3B sizes, plus DINOv2 vision models
 - **Multi-backend support**: Automatically detects and uses the best available backend (CUDA, MPS, or CPU)
-- **Image-only mode**: Option to process only image embeddings without the text encoder for reduced memory usage (Nomic models)
 - **Memory tracking**: Reports peak memory usage during processing
 - **Batch processing**: Configurable batch sizes for optimal performance
 - **Multiple image formats**: Supports JPG, PNG, BMP, GIF, TIFF, and WebP
@@ -135,23 +134,6 @@ Specify a different model or local path (overrides --model-variant):
 uv run python main.py /path/to/images --model-name /path/to/local/model
 ```
 
-### Image-Only Mode
-
-Process only image embeddings without the text encoder to reduce memory usage:
-
-```bash
-# Use image-only mode (calls model.forward_image instead of model forward)
-uv run python main.py /path/to/images --image-only
-
-# Combine with other options
-uv run python main.py /path/to/images \
-  --image-only \
-  --model-variant colnomic-3b \
-  --batch-size 16
-```
-
-This mode is useful when you only need visual embeddings and want to minimize memory consumption.
-
 ### Complete Examples
 
 ```bash
@@ -183,7 +165,6 @@ uv run python main.py ./my_images \
 | `--model-name` | str | None | Custom model name or path (overrides `--model-variant`) |
 | `--batch-size` | int | 8 | Batch size for processing images |
 | `--backend` | str | auto | Compute backend: `cuda`, `mps`, `cpu`, or `auto` |
-| `--image-only` | flag | False | Process only image embeddings without text encoder (Nomic models only) |
 
 ## Output
 
@@ -194,7 +175,6 @@ Using model variant: colnomic-7b (nomic-ai/colnomic-embed-multimodal-7b)
 Auto-detected backend: cuda
 Using backend: cuda
 Using dtype: torch.bfloat16
-Image-only mode: True
 Loading model: nomic-ai/colnomic-embed-multimodal-7b
 Model loaded successfully
 Found 100 images in /path/to/images
@@ -209,6 +189,7 @@ Processing complete!
 Backend: cuda
 Total images processed: 100
 Total batches: 13
+Runtime: 120.45 seconds (2.01 minutes)
 Peak CUDA memory used: 14.32 GB (14663.45 MB)
 ============================================================
 ```
@@ -243,7 +224,6 @@ uv run python benchmark_all.py
 ### Benchmark Features
 
 - Tests all models (or a subset) with configurable batch sizes
-- For Nomic models: Tests both full mode and image-only mode
 - Records peak VRAM usage and processing time
 - Saves results incrementally to markdown file
 - Optional push notifications via [ntfy.sh](https://ntfy.sh)
@@ -265,9 +245,6 @@ uv run python benchmark_all.py --models nomic
 uv run python benchmark_all.py \
   --models dinov2-small dinov2-base \
   --batch-sizes 1 8 16
-
-# Skip Nomic full mode (only run image-only mode)
-uv run python benchmark_all.py --skip-nomic-full
 
 # Use specific backend and custom output file
 uv run python benchmark_all.py \
@@ -296,7 +273,6 @@ uv run python benchmark_all.py \
 | `--output` | Path | benchmark_results.md | Output file for results |
 | `--models` | str[] | all | Models to benchmark: specific variants, `nomic`, `dinov2`, or `all` |
 | `--batch-sizes` | int[] | [1,4,8,16,32] | Batch sizes to test |
-| `--skip-nomic-full` | flag | False | Skip full mode for Nomic models (only run image-only mode) |
 | `--ntfy-topic` | str | None | Optional ntfy.sh topic for push notifications |
 
 ### Push Notifications
@@ -332,7 +308,6 @@ uv run python benchmark_all.py \
 
 The script generates a markdown file with:
 - Summary tables for each model variant
-- Separate sections for full vs. image-only modes
 - Runtime, peak VRAM, and success/failure status
 - Detailed JSON results at the end
 

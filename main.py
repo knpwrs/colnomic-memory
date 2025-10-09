@@ -166,8 +166,7 @@ def process_images_in_batches(
     processor: Union[ColQwen2_5_Processor, AutoImageProcessor],
     batch_size: int,
     backend: Backend,
-    model_type: ModelType,
-    image_only: bool = False
+    model_type: ModelType
 ) -> List[torch.Tensor]:
     """Process images in batches and generate embeddings."""
     all_embeddings = []
@@ -181,13 +180,7 @@ def process_images_in_batches(
             if model_type == ModelType.NOMIC:
                 # Process with Nomic/ColNomic models
                 batch_images = processor.process_images(batch).to(model.device)
-
-                if image_only:
-                    # Use forward_image to process only image embeddings
-                    embeddings = model.forward_image(**batch_images)
-                else:
-                    # Use standard forward which includes both image and text processing
-                    embeddings = model(**batch_images)
+                embeddings = model(**batch_images)
                 all_embeddings.append(embeddings.cpu())
 
             elif model_type == ModelType.DINOV2:
@@ -246,11 +239,6 @@ def main():
         default="auto",
         help="Compute backend to use (default: auto - auto-detect best available)"
     )
-    parser.add_argument(
-        "--image-only",
-        action="store_true",
-        help="Process only image embeddings without text encoder (uses model.forward_image)"
-    )
 
     args = parser.parse_args()
 
@@ -308,13 +296,6 @@ def main():
     print(f"Using backend: {backend.value}")
     print(f"Using dtype: {dtype}")
 
-    # Validate image-only mode
-    if args.image_only and model_type == ModelType.DINOV2:
-        print("Note: --image-only flag is ignored for DINOv2 models (they only process images)", file=sys.stderr)
-
-    if model_type == ModelType.NOMIC:
-        print(f"Image-only mode: {args.image_only}")
-
     print(f"Loading model: {model_name}")
 
     # Load model and processor based on model type
@@ -350,7 +331,7 @@ def main():
     print(f"\nProcessing {len(images)} images with batch size {args.batch_size}")
     start_time = time.time()
     embeddings = process_images_in_batches(
-        images, model, processor, args.batch_size, backend, model_type, image_only=args.image_only
+        images, model, processor, args.batch_size, backend, model_type
     )
     end_time = time.time()
 
