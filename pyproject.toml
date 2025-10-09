@@ -9,4 +9,5 @@ dependencies = [
     "pillow>=10.0.0",
     "transformers>=4.40.0",
     "colpali-engine @ git+https://github.com/illuin-tech/colpali.git",
+    "requests>=2.31.0",
 ]

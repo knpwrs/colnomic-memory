@@ -1,37 +1,72 @@
 #!/usr/bin/env python3
 """
-Script to generate embeddings for images using Nomic/ColNomic Embed Multimodal models.
+Script to generate embeddings for images using Nomic/ColNomic Embed Multimodal models
+and DINOv2 vision models.
 Supports multiple backends (CUDA, MPS, CPU) and reports peak memory usage.
 """
 import argparse
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 from enum import Enum
 
 import torch
 from PIL import Image
 from transformers.utils.import_utils import is_flash_attn_2_available
+from transformers import AutoImageProcessor, AutoModel
 from colpali_engine.models import ColQwen2_5, ColQwen2_5_Processor
 
 
+class ModelType(Enum):
+    """Model architecture types."""
+    NOMIC = "nomic"  # Nomic/ColNomic models using ColQwen2_5
+    DINOV2 = "dinov2"  # DINOv2 vision models
+
+
 class ModelVariant(Enum):
-    """Supported Nomic model variants."""
+    """Supported model variants."""
+    # Nomic models
     COLNOMIC_7B = "colnomic-7b"
     COLNOMIC_3B = "colnomic-3b"
     NOMIC_7B = "nomic-7b"
     NOMIC_3B = "nomic-3b"
 
+    # DINOv2 models
+    DINOV2_SMALL = "dinov2-small"
+    DINOV2_BASE = "dinov2-base"
+    DINOV2_LARGE = "dinov2-large"
+    DINOV2_GIANT = "dinov2-giant"
+
     def get_model_name(self) -> str:
         """Get the Hugging Face model identifier."""
         model_map = {
+            # Nomic models
             ModelVariant.COLNOMIC_7B: "nomic-ai/colnomic-embed-multimodal-7b",
             ModelVariant.COLNOMIC_3B: "nomic-ai/colnomic-embed-multimodal-3b",
             ModelVariant.NOMIC_7B: "nomic-ai/nomic-embed-multimodal-7b",
             ModelVariant.NOMIC_3B: "nomic-ai/nomic-embed-multimodal-3b",
+
+            # DINOv2 models
+            ModelVariant.DINOV2_SMALL: "facebook/dinov2-small",
+            ModelVariant.DINOV2_BASE: "facebook/dinov2-base",
+            ModelVariant.DINOV2_LARGE: "facebook/dinov2-large",
+            ModelVariant.DINOV2_GIANT: "facebook/dinov2-giant",
         }
         return model_map[self]
+
+    def get_model_type(self) -> ModelType:
+        """Get the model architecture type."""
+        nomic_variants = {
+            ModelVariant.COLNOMIC_7B,
+            ModelVariant.COLNOMIC_3B,
+            ModelVariant.NOMIC_7B,
+            ModelVariant.NOMIC_3B,
+        }
+        if self in nomic_variants:
+            return ModelType.NOMIC
+        else:
+            return ModelType.DINOV2
 
     @classmethod
     def from_string(cls, variant_str: str) -> "ModelVariant":
@@ -127,10 +162,11 @@ def clear_cache(backend: Backend) -> None:
 
 def process_images_in_batches(
     images: List[Image.Image],
-    model: ColQwen2_5,
-    processor: ColQwen2_5_Processor,
+    model: Union[ColQwen2_5, AutoModel],
+    processor: Union[ColQwen2_5_Processor, AutoImageProcessor],
     batch_size: int,
     backend: Backend,
+    model_type: ModelType,
     image_only: bool = False
 ) -> List[torch.Tensor]:
     """Process images in batches and generate embeddings."""
@@ -141,16 +177,29 @@ def process_images_in_batches(
         print(f"Processing batch {i // batch_size + 1}/{(len(images) + batch_size - 1) // batch_size} "
               f"({len(batch)} images)")
 
-        batch_images = processor.process_images(batch).to(model.device)
-
         with torch.no_grad():
-            if image_only:
-                # Use forward_image to process only image embeddings
-                embeddings = model.forward_image(**batch_images)
-            else:
-                # Use standard forward which includes both image and text processing
-                embeddings = model(**batch_images)
-            all_embeddings.append(embeddings.cpu())
+            if model_type == ModelType.NOMIC:
+                # Process with Nomic/ColNomic models
+                batch_images = processor.process_images(batch).to(model.device)
+
+                if image_only:
+                    # Use forward_image to process only image embeddings
+                    embeddings = model.forward_image(**batch_images)
+                else:
+                    # Use standard forward which includes both image and text processing
+                    embeddings = model(**batch_images)
+                all_embeddings.append(embeddings.cpu())
+
+            elif model_type == ModelType.DINOV2:
+                # Process with DINOv2 models
+                inputs = processor(images=batch, return_tensors="pt").to(model.device)
+                outputs = model(**inputs)
+
+                # Extract CLS token (global embedding) for each image
+                # DINOv2 outputs: [batch_size, num_patches + 1, hidden_dim]
+                # First token is the CLS token
+                embeddings = outputs.last_hidden_state[:, 0, :]
+                all_embeddings.append(embeddings.cpu())
 
         # Clear cache after each batch
         clear_cache(backend)
@@ -176,9 +225,13 @@ def main():
     parser.add_argument(
         "--model-variant",
         type=str,
-        choices=["colnomic-7b", "colnomic-3b", "nomic-7b", "nomic-3b"],
+        choices=[
+            "colnomic-7b", "colnomic-3b", "nomic-7b", "nomic-3b",
+            "dinov2-small", "dinov2-base", "dinov2-large", "dinov2-giant"
+        ],
         default="colnomic-7b",
-        help="Model variant to use (default: colnomic-7b). ColNomic models use multi-vector embeddings, Nomic models use single-vector embeddings."
+        help="Model variant to use (default: colnomic-7b). ColNomic models use multi-vector embeddings, "
+             "Nomic models use single-vector embeddings, DINOv2 models use vision transformers for embeddings."
     )
     parser.add_argument(
         "--model-name",
@@ -212,11 +265,17 @@ def main():
     # Determine model to use
     if args.model_name:
         model_name = args.model_name
+        model_type = None  # Will need to be inferred or specified separately
         print(f"Using custom model: {model_name}")
+        print("Warning: Custom model path provided. Assuming Nomic model type.", file=sys.stderr)
+        print("If using DINOv2, please use --model-variant instead.", file=sys.stderr)
+        model_type = ModelType.NOMIC
     else:
         model_variant = ModelVariant.from_string(args.model_variant)
         model_name = model_variant.get_model_name()
+        model_type = model_variant.get_model_type()
         print(f"Using model variant: {args.model_variant} ({model_name})")
+        print(f"Model type: {model_type.value}")
 
     # Determine backend
     if args.backend == "auto":
@@ -248,18 +307,36 @@ def main():
 
     print(f"Using backend: {backend.value}")
     print(f"Using dtype: {dtype}")
-    print(f"Image-only mode: {args.image_only}")
+
+    # Validate image-only mode
+    if args.image_only and model_type == ModelType.DINOV2:
+        print("Note: --image-only flag is ignored for DINOv2 models (they only process images)", file=sys.stderr)
+
+    if model_type == ModelType.NOMIC:
+        print(f"Image-only mode: {args.image_only}")
+
     print(f"Loading model: {model_name}")
 
-    # Load model
-    model = ColQwen2_5.from_pretrained(
-        model_name,
-        torch_dtype=dtype,
-        device_map=device_map,
-        attn_implementation="flash_attention_2" if use_flash_attn else None,
-    ).eval()
+    # Load model and processor based on model type
+    if model_type == ModelType.NOMIC:
+        # Load Nomic/ColNomic model
+        model = ColQwen2_5.from_pretrained(
+            model_name,
+            torch_dtype=dtype,
+            device_map=device_map,
+            attn_implementation="flash_attention_2" if use_flash_attn else None,
+        ).eval()
 
-    processor = ColQwen2_5_Processor.from_pretrained(model_name)
+        processor = ColQwen2_5_Processor.from_pretrained(model_name)
+
+    elif model_type == ModelType.DINOV2:
+        # Load DINOv2 model
+        model = AutoModel.from_pretrained(
+            model_name,
+            torch_dtype=dtype,
+        ).to(device_map).eval()
+
+        processor = AutoImageProcessor.from_pretrained(model_name)
 
     print("Model loaded successfully")
 
@@ -273,7 +350,7 @@ def main():
     print(f"\nProcessing {len(images)} images with batch size {args.batch_size}")
     start_time = time.time()
     embeddings = process_images_in_batches(
-        images, model, processor, args.batch_size, backend, image_only=args.image_only
+        images, model, processor, args.batch_size, backend, model_type, image_only=args.image_only
     )
     end_time = time.time()
 

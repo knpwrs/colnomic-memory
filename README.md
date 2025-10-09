@@ -1,21 +1,23 @@
 # Nomic Memory
 
-Generate image embeddings using Nomic's multimodal embedding models with support for multiple compute backends and memory usage tracking. Supports both ColNomic (multi-vector) and Nomic (single-vector) variants in 7B and 3B parameter sizes.
+Generate image embeddings using Nomic's multimodal embedding models and DINOv2 vision models with support for multiple compute backends and memory usage tracking. Supports both ColNomic (multi-vector) and Nomic (single-vector) variants in 7B and 3B parameter sizes, as well as DINOv2 vision transformers.
 
 ## Features
 
-- **Multiple model variants**: Support for ColNomic (multi-vector) and Nomic (single-vector) models in 7B and 3B sizes
+- **Multiple model variants**: Support for ColNomic (multi-vector) and Nomic (single-vector) models in 7B and 3B sizes, plus DINOv2 vision models
 - **Multi-backend support**: Automatically detects and uses the best available backend (CUDA, MPS, or CPU)
-- **Image-only mode**: Option to process only image embeddings without the text encoder for reduced memory usage
+- **Image-only mode**: Option to process only image embeddings without the text encoder for reduced memory usage (Nomic models)
 - **Memory tracking**: Reports peak memory usage during processing
 - **Batch processing**: Configurable batch sizes for optimal performance
 - **Multiple image formats**: Supports JPG, PNG, BMP, GIF, TIFF, and WebP
 - **Backend-specific optimizations**:
-  - **CUDA**: bfloat16 precision, Flash Attention 2 (if available)
+  - **CUDA**: bfloat16 precision, Flash Attention 2 (if available for Nomic models)
   - **MPS**: float16 precision (Apple Silicon)
   - **CPU**: float32 precision
 
 ## Supported Models
+
+### Nomic Multimodal Models
 
 | Model Variant | Parameters | Type | Hugging Face Model | NDCG@5 (Vidore-v2) |
 |---------------|------------|------|-------------------|-------------------|
@@ -27,6 +29,17 @@ Generate image embeddings using Nomic's multimodal embedding models with support
 **ColNomic models** use multi-vector late interaction, creating multiple embeddings per document for more precise matching. Best for visual document retrieval tasks like research papers, technical docs, and product catalogs.
 
 **Nomic models** use single-vector embeddings, offering a simpler dense embedding approach with lower storage requirements.
+
+### DINOv2 Vision Models
+
+| Model Variant | Parameters | Type | Hugging Face Model | Embedding Dim |
+|---------------|------------|------|-------------------|---------------|
+| DINOv2 Small | 22M | Vision Transformer | `facebook/dinov2-small` | 384 |
+| DINOv2 Base | 86M | Vision Transformer | `facebook/dinov2-base` | 768 |
+| DINOv2 Large | 300M | Vision Transformer | `facebook/dinov2-large` | 1024 |
+| DINOv2 Giant | 1.1B | Vision Transformer | `facebook/dinov2-giant` | 1536 |
+
+**DINOv2 models** are self-supervised vision transformers that produce high-quality image embeddings without any fine-tuning. They excel at capturing visual features for tasks like image classification, retrieval, and similarity search. Each image produces a single CLS token embedding representing the global image features.
 
 ## Installation
 
@@ -57,7 +70,8 @@ uv run python main.py /path/to/images
 Choose between different model variants:
 
 ```bash
-# Use ColNomic 7B (default - best performance)
+# Nomic Models (Multimodal)
+# Use ColNomic 7B (default - best performance for multimodal)
 uv run python main.py /path/to/images --model-variant colnomic-7b
 
 # Use ColNomic 3B (faster, lower memory)
@@ -68,6 +82,19 @@ uv run python main.py /path/to/images --model-variant nomic-7b
 
 # Use Nomic 3B (fastest, lowest memory)
 uv run python main.py /path/to/images --model-variant nomic-3b
+
+# DINOv2 Models (Vision-only)
+# Use DINOv2 Small (lightweight, 22M parameters)
+uv run python main.py /path/to/images --model-variant dinov2-small
+
+# Use DINOv2 Base (balanced, 86M parameters)
+uv run python main.py /path/to/images --model-variant dinov2-base
+
+# Use DINOv2 Large (high quality, 300M parameters)
+uv run python main.py /path/to/images --model-variant dinov2-large
+
+# Use DINOv2 Giant (best quality, 1.1B parameters)
+uv run python main.py /path/to/images --model-variant dinov2-giant
 ```
 
 ### Specify Backend
@@ -125,13 +152,26 @@ uv run python main.py /path/to/images \
 
 This mode is useful when you only need visual embeddings and want to minimize memory consumption.
 
-### Complete Example
+### Complete Examples
 
 ```bash
+# Use Nomic multimodal model with CUDA
 uv run python main.py ./my_images \
   --model-variant colnomic-3b \
   --backend cuda \
   --batch-size 8
+
+# Use DINOv2 vision model with MPS (Apple Silicon)
+uv run python main.py ./my_images \
+  --model-variant dinov2-base \
+  --backend mps \
+  --batch-size 16
+
+# Use DINOv2 Giant on CPU with smaller batch
+uv run python main.py ./my_images \
+  --model-variant dinov2-giant \
+  --backend cpu \
+  --batch-size 4
 ```
 
 ## Command-Line Arguments
@@ -139,11 +179,11 @@ uv run python main.py ./my_images \
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
 | `directory` | Path | Required | Directory containing images to process |
-| `--model-variant` | str | colnomic-7b | Model variant: `colnomic-7b`, `colnomic-3b`, `nomic-7b`, or `nomic-3b` |
+| `--model-variant` | str | colnomic-7b | Model variant: `colnomic-7b`, `colnomic-3b`, `nomic-7b`, `nomic-3b`, `dinov2-small`, `dinov2-base`, `dinov2-large`, or `dinov2-giant` |
 | `--model-name` | str | None | Custom model name or path (overrides `--model-variant`) |
 | `--batch-size` | int | 8 | Batch size for processing images |
 | `--backend` | str | auto | Compute backend: `cuda`, `mps`, `cpu`, or `auto` |
-| `--image-only` | flag | False | Process only image embeddings without text encoder |
+| `--image-only` | flag | False | Process only image embeddings without text encoder (Nomic models only) |
 
 ## Output
 
@@ -179,30 +219,176 @@ Peak CUDA memory used: 14.32 GB (14663.45 MB)
 - CUDA-capable GPU (for CUDA backend), Apple Silicon (for MPS backend), or CPU
 - Dependencies managed via uv (see `pyproject.toml`)
 
+## Testing
+
+A test script is provided to verify the DINOv2 integration:
+
+```bash
+uv run python test_dinov2.py
+```
+
+The test script includes:
+- Model type detection tests
+- Model name mapping tests
+- Optional model loading and embedding extraction test (requires downloading DINOv2 Small model)
+
+## Benchmarking
+
+A comprehensive benchmarking script is provided to test all model variants across different batch sizes:
+
+```bash
+uv run python benchmark_all.py
+```
+
+### Benchmark Features
+
+- Tests all models (or a subset) with configurable batch sizes
+- For Nomic models: Tests both full mode and image-only mode
+- Records peak VRAM usage and processing time
+- Saves results incrementally to markdown file
+- Optional push notifications via [ntfy.sh](https://ntfy.sh)
+- Handles errors gracefully with timeout protection (1 hour per run)
+
+### Benchmark Usage
+
+```bash
+# Run all models with all batch sizes (default: 1, 4, 8, 16, 32)
+uv run python benchmark_all.py
+
+# Run only DINOv2 models
+uv run python benchmark_all.py --models dinov2
+
+# Run only Nomic models
+uv run python benchmark_all.py --models nomic
+
+# Run specific models with custom batch sizes
+uv run python benchmark_all.py \
+  --models dinov2-small dinov2-base \
+  --batch-sizes 1 8 16
+
+# Skip Nomic full mode (only run image-only mode)
+uv run python benchmark_all.py --skip-nomic-full
+
+# Use specific backend and custom output file
+uv run python benchmark_all.py \
+  --backend cuda \
+  --output my_benchmarks.md
+
+# Run with push notifications (requires ntfy.sh topic)
+uv run python benchmark_all.py \
+  --ntfy-topic my-benchmark-notifications
+
+# Full example with all options
+uv run python benchmark_all.py \
+  --models dinov2 \
+  --batch-sizes 1 4 8 \
+  --backend cuda \
+  --output dinov2_benchmarks.md \
+  --ntfy-topic gpu-benchmarks
+```
+
+### Benchmark Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--image-dir` | Path | ./images | Directory containing images to process |
+| `--backend` | str | auto | Compute backend: `cuda`, `mps`, `cpu`, or `auto` |
+| `--output` | Path | benchmark_results.md | Output file for results |
+| `--models` | str[] | all | Models to benchmark: specific variants, `nomic`, `dinov2`, or `all` |
+| `--batch-sizes` | int[] | [1,4,8,16,32] | Batch sizes to test |
+| `--skip-nomic-full` | flag | False | Skip full mode for Nomic models (only run image-only mode) |
+| `--ntfy-topic` | str | None | Optional ntfy.sh topic for push notifications |
+
+### Push Notifications
+
+The benchmark script can send push notifications via [ntfy.sh](https://ntfy.sh) to keep you updated on long-running benchmarks:
+
+**Notifications sent for:**
+- Benchmark suite start
+- Each individual run completion (with runtime and VRAM stats)
+- Each individual run failure/timeout/error
+- Final suite completion summary
+
+**To receive notifications:**
+1. Choose a unique topic name (e.g., `my-gpu-benchmarks`)
+2. Subscribe to your topic:
+   - Web: Visit https://ntfy.sh/your-topic-name
+   - Mobile: Download ntfy app and subscribe
+   - Desktop: Use ntfy desktop client
+3. Run benchmark with `--ntfy-topic your-topic-name`
+
+Example:
+```bash
+# Start benchmark with notifications
+uv run python benchmark_all.py \
+  --models dinov2 \
+  --ntfy-topic my-gpu-benchmarks
+
+# Subscribe to receive updates at:
+# https://ntfy.sh/my-gpu-benchmarks
+```
+
+### Benchmark Output
+
+The script generates a markdown file with:
+- Summary tables for each model variant
+- Separate sections for full vs. image-only modes
+- Runtime, peak VRAM, and success/failure status
+- Detailed JSON results at the end
+
+Results are saved incrementally, so you can view progress even while benchmarks are running.
+
 ## Model Information
 
-This script supports four Nomic multimodal embedding models:
+This script supports multiple embedding model families:
 
-### ColNomic Models (Multi-vector)
+### Nomic Multimodal Models
+
+#### ColNomic Models (Multi-vector)
 
 - Use late interaction mechanism for more precise matching
 - Create multiple embeddings per document/query
 - Best performance on visual document retrieval benchmarks
 - Ideal for: research papers, technical docs, product catalogs, financial reports
+- Built on Qwen2.5-VL architecture
 
-### Nomic Models (Single-vector)
+#### Nomic Models (Single-vector)
 
 - Use dense single-vector embeddings
 - Lower storage requirements
 - Simpler retrieval pipeline
 - Still achieve strong performance on multimodal tasks
+- Built on Qwen2.5-VL architecture
 
-All models:
-
+All Nomic models:
 - Excel at visual document retrieval
 - Directly encode interleaved text and images
 - Support multiple image formats
-- Built on Qwen2.5-VL architecture
+
+### DINOv2 Vision Models
+
+- Self-supervised vision transformers trained on 142M images
+- Produce high-quality visual features without fine-tuning
+- Generate single CLS token embeddings (global image representation)
+- Excellent for image classification, retrieval, and similarity search
+- Ideal for: general image understanding, visual search, clustering
+- Based on Vision Transformer (ViT) architecture
+- No text encoding capability - purely visual features
+
+### Choosing Between Model Families
+
+**Use Nomic/ColNomic models when:**
+- You need multimodal embeddings (text + images together)
+- Working with visual documents (PDFs, slides, diagrams)
+- Need to retrieve based on both visual and textual content
+- Want state-of-the-art performance on document retrieval
+
+**Use DINOv2 models when:**
+- You only need pure image embeddings
+- Working with photographs, artwork, or general images
+- Want lighter-weight models with faster inference
+- Need embeddings for image classification or clustering
+- Want models that are more widely adopted in computer vision research
 
 ## Performance & Memory Usage
 
