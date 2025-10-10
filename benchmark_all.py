@@ -30,7 +30,7 @@ DINOV2_MODELS = [
     "dinov2-giant",
 ]
 
-BATCH_SIZES = [1, 4, 8, 16, 32]
+BATCH_SIZES = [1, 4, 8, 16, 32, 64, 128]
 
 
 def send_ntfy_notification(

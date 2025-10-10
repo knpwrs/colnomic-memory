@@ -233,7 +233,7 @@ uv run python benchmark_all.py
 ### Benchmark Usage
 
 ```bash
-# Run all models with all batch sizes (default: 1, 4, 8, 16, 32)
+# Run all models with all batch sizes (default: 1, 4, 8, 16, 32, 64, 128)
 uv run python benchmark_all.py
 
 # Run only DINOv2 models
@@ -273,7 +273,7 @@ uv run python benchmark_all.py \
 | `--backend` | str | auto | Compute backend: `cuda`, `mps`, `cpu`, or `auto` |
 | `--output` | Path | benchmark_results.md | Output file for results |
 | `--models` | str[] | all | Models to benchmark: specific variants, `nomic`, `dinov2`, or `all` |
-| `--batch-sizes` | int[] | [1,4,8,16,32] | Batch sizes to test |
+| `--batch-sizes` | int[] | [1,4,8,16,32,64,128] | Batch sizes to test |
 | `--ntfy-topic` | str | None | Optional ntfy.sh topic for push notifications |
 
 ### Push Notifications
@@ -375,7 +375,7 @@ All Nomic models:
 
 ## Performance & Memory Usage
 
-Benchmark results on various configurations (2000 images):
+Benchmark results on various configurations (2000 images, NVIDIA H100 GPU):
 
 ### ColNomic 3B (Multi-vector)
 
