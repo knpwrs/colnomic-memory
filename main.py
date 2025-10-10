@@ -168,34 +168,94 @@ def process_images_in_batches(
     backend: Backend,
     model_type: ModelType
 ) -> List[torch.Tensor]:
-    """Process images in batches and generate embeddings."""
+    """Process images in batches and generate embeddings with pipelined execution."""
     all_embeddings = []
+    total_batches = (len(images) + batch_size - 1) // batch_size
 
-    for i in range(0, len(images), batch_size):
-        batch = images[i:i + batch_size]
-        print(f"Processing batch {i // batch_size + 1}/{(len(images) + batch_size - 1) // batch_size} "
-              f"({len(batch)} images)")
+    # Use CUDA streams for pipelined execution (CUDA only)
+    use_streams = backend == Backend.CUDA
+    if use_streams:
+        # Create separate streams for data transfer and computation
+        compute_stream = torch.cuda.Stream()
+        transfer_stream = torch.cuda.Stream()
 
-        with torch.no_grad():
-            if model_type == ModelType.NOMIC:
-                # Process with Nomic/ColNomic models
-                batch_images = processor.process_images(batch).to(model.device)
-                embeddings = model(**batch_images)
-                all_embeddings.append(embeddings.cpu())
+    # Prepare first batch
+    current_batch_idx = 0
+    current_batch = images[0:batch_size]
 
-            elif model_type == ModelType.DINOV2:
-                # Process with DINOv2 models
-                inputs = processor(images=batch, return_tensors="pt").to(model.device)
-                outputs = model(**inputs)
+    # Preprocess first batch on CPU
+    if model_type == ModelType.NOMIC:
+        current_inputs = processor.process_images(current_batch)
+    else:  # DINOV2
+        current_inputs = processor(images=current_batch, return_tensors="pt")
 
-                # Extract CLS token (global embedding) for each image
-                # DINOv2 outputs: [batch_size, num_patches + 1, hidden_dim]
-                # First token is the CLS token
-                embeddings = outputs.last_hidden_state[:, 0, :]
-                all_embeddings.append(embeddings.cpu())
+    with torch.no_grad():
+        while current_batch_idx < total_batches:
+            batch_num = current_batch_idx + 1
+            print(f"Processing batch {batch_num}/{total_batches} ({len(current_batch)} images)")
 
-        # Clear cache after each batch
-        clear_cache(backend)
+            # Prepare next batch while current one is processing (if available)
+            next_batch_idx = current_batch_idx + 1
+            if next_batch_idx < total_batches:
+                next_start = next_batch_idx * batch_size
+                next_end = min(next_start + batch_size, len(images))
+                next_batch = images[next_start:next_end]
+
+                # Preprocess next batch on CPU while GPU works on current batch
+                if model_type == ModelType.NOMIC:
+                    next_inputs = processor.process_images(next_batch)
+                else:  # DINOV2
+                    next_inputs = processor(images=next_batch, return_tensors="pt")
+            else:
+                next_inputs = None
+
+            # Transfer current batch to GPU and compute
+            if use_streams:
+                with torch.cuda.stream(compute_stream):
+                    current_inputs_gpu = {k: v.to(model.device, non_blocking=True)
+                                         for k, v in current_inputs.items()}
+
+                    if model_type == ModelType.NOMIC:
+                        embeddings = model(**current_inputs_gpu)
+                    else:  # DINOV2
+                        outputs = model(**current_inputs_gpu)
+                        embeddings = outputs.last_hidden_state[:, 0, :]
+
+                    # Transfer results back to CPU asynchronously
+                    embeddings_cpu = embeddings.cpu()
+
+                # Wait for computation to finish
+                compute_stream.synchronize()
+            else:
+                # Non-CUDA backends: standard synchronous processing
+                current_inputs_gpu = {k: v.to(model.device)
+                                     for k, v in current_inputs.items()}
+
+                if model_type == ModelType.NOMIC:
+                    embeddings = model(**current_inputs_gpu)
+                else:  # DINOV2
+                    outputs = model(**current_inputs_gpu)
+                    embeddings = outputs.last_hidden_state[:, 0, :]
+
+                embeddings_cpu = embeddings.cpu()
+
+            all_embeddings.append(embeddings_cpu)
+
+            # Delete processed batch tensors to free GPU memory
+            del current_inputs_gpu
+            del embeddings
+            if model_type == ModelType.DINOV2:
+                del outputs
+
+            # Selective cache clearing - only if we've accumulated enough batches
+            # This reduces the overhead of cache clearing while preventing OOM
+            if (batch_num % 4 == 0) or (batch_num == total_batches):
+                clear_cache(backend)
+
+            # Move to next batch
+            current_batch = next_batch if next_inputs is not None else None
+            current_inputs = next_inputs
+            current_batch_idx = next_batch_idx
 
     return all_embeddings
 
